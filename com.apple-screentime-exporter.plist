@@ -1,0 +1,55 @@
+<!--
+This file should be symlinked to: ~/Library/LaunchAgents/com.apple-screentime-exporter.plist
+-->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.apple-screentime-exporter</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Update this path to your Python installation (run: which python3) -->
+        <string>/Users/yucheng/.pyenv/versions/3.10.20/bin/python3</string>
+        <!-- Update this path to your installation directory -->
+        <string>/Users/yucheng/Documents/GitHub/screentime/run.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <!-- Update this path to your installation directory -->
+    <string>/Users/yucheng/Documents/GitHub/screentime</string>
+
+    <!-- Run every 6 hours (21600 seconds) -->
+    <key>StartInterval</key>
+    <integer>21600</integer>
+
+    <!-- Run immediately when loaded -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Background task settings -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>Nice</key>
+    <integer>10</integer>
+
+    <key>LowPriorityIO</key>
+    <true/>
+
+
+    <key>StandardOutPath</key>
+    <string>/Users/yucheng/Documents/GitHub/screentime/logs/launchd.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/yucheng/Documents/GitHub/screentime/logs/launchd.err</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/yucheng/.pyenv/versions/3.10.20/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>

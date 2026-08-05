@@ -98,7 +98,10 @@ cd screentime
 
 # Install aw-import-screentime (for iOS data)
 git clone https://github.com/ActivityWatch/aw-import-screentime.git
-cd aw-import-screentime && python3 -m venv .venv && .venv/bin/pip install -e . && cd ..
+cd aw-import-screentime && python3 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install git+https://github.com/cclgroupltd/ccl-segb.git  # Critical for macOS 15+
+.venv/bin/pip install -e . && cd ..
 
 # Install Python dependencies
 pip3 install python-dotenv pandas requests
@@ -158,19 +161,20 @@ Export completed.
 ### Finding Device IDs
 
 ```bash
-cd aw-import-screentime && .venv/bin/aw-import-screentime devices
+cd aw-import-screentime && .venv/bin/aw-import-screentime devices --platform 3
 ```
 
 Test each device to identify it:
 
 ```bash
-.venv/bin/aw-import-screentime events preview --device DEVICE-ID-HERE --since 1d
+.venv/bin/aw-import-screentime events preview --device DEVICE-ID-HERE --platform 3 --since 1d
 ```
 
 ### Single Device
 
 ```env
 DEVICE_ID=CA06AED8-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+PLATFORM=3
 ```
 
 ### Multiple Devices
@@ -178,6 +182,7 @@ DEVICE_ID=CA06AED8-XXXX-XXXX-XXXX-XXXXXXXXXXXX
 ```env
 # Format: Name:UUID,Name:UUID
 DEVICES=iPhone 15 Pro:CA06AED8-...,iPad Pro:51FBF7C3-...,iPhone Work:7B2A9F1C-...
+PLATFORM=3
 ```
 
 Each device appears separately in the dashboard and Home Assistant.
@@ -187,6 +192,7 @@ Each device appears separately in the dashboard and Home Assistant.
 ```env
 # === iOS Devices ===
 DEVICE_ID=CA06AED8-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+PLATFORM=3
 # Or for multiple: DEVICES=iPhone 15 Pro:UUID1,iPad:UUID2
 
 # === Home Assistant ===
@@ -199,6 +205,23 @@ INFLUX_TOKEN=your-influx-token
 INFLUX_ORG=home
 INFLUX_BUCKET=screentime
 ```
+
+## Biome Directory Symlink
+
+The device ID registered in `sync.db` (`<REGISTERED_UUID>`) may not match the actual physical directory name (`<ACTUAL_UUID>`) under `~/Library/Biome`. If you see `[Errno 2] No such file or directory` when running preview or collection, create a symbolic link:
+
+```
+ln -s ~/Library/Biome/streams/restricted/App.InFocus/remote/<ACTUAL_UUID> ~/Library/Biome/streams/restricted/App.InFocus/remote/<REGISTERED_UUID>
+```
+
+where
+
+- <REGISTERED_UUID>: The DEVICE_ID returned by `cd aw-import-screentime && .venv/bin/aw-import-screentime devices --platform 3` (`DEVICE_ID` or `DEVICES` in `.env`).
+- <ACTUAL_UUID>: The active folder name found under:
+
+  ```
+  ls ~/Library/Biome/streams/restricted/App.InFocus/remote/
+  ```
 
 ---
 

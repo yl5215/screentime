@@ -22,7 +22,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 # --- CONFIGURATION ---
 SCRIPT_DIR = Path(__file__).parent.parent
 OUTPUT_CSV = SCRIPT_DIR / "data" / "screentime.csv"
-LAST_TIMESTAMP_FILE = SCRIPT_DIR / "data" / "screentime.csv.last"
+LAST_TIMESTAMP_FILE = SCRIPT_DIR / "data" / "screentime.csv.last.json"
 AW_BIN = SCRIPT_DIR / "aw-import-screentime" / ".venv" / "bin" / "aw-import-screentime"
 
 # Mac knowledgeC.db - the official Screen Time database
@@ -73,20 +73,20 @@ def get_app_title(bundle_id):
 
     return bundle_id
 
-def get_last_timestamp():
-    """Reads the last extraction timestamp from a separate file."""
+def get_last_timestamps() -> dict:
+    """Reads extraction timestamps per source device."""
     if LAST_TIMESTAMP_FILE.exists():
         try:
             with open(LAST_TIMESTAMP_FILE, "r") as f:
-                return float(f.read().strip())
+                return json.load(f)
         except:
             pass
-    return 0.0
+    return {}
 
-def save_last_timestamp(ts):
-    """Saves the last extraction timestamp."""
+def save_last_timestamps(ts_dict: dict):
+    """Saves extraction timestamps per source device."""
     with open(LAST_TIMESTAMP_FILE, "w") as f:
-        f.write(str(ts))
+        json.dump(ts_dict, f, indent=2)
 
 def get_mac_data(last_created_at):
     """Extracts Mac Screen Time from knowledgeC.db."""
@@ -157,7 +157,8 @@ def get_mobile_data(device_name, device_id, last_created_at):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Extracting {device_name} data...")
 
     # Always query 28 days, deduplication happens via created_at
-    cmd = [str(AW_BIN), "events", "preview", "--device", device_id, "--since", "28d"]
+    platform = os.getenv("PLATFORM", "3")
+    cmd = [str(AW_BIN), "events", "preview", "--device", device_id, "--platform", platform, "--since", "365d", "--limit", "0"]
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=300)
@@ -205,15 +206,18 @@ def get_mobile_data(device_name, device_id, last_created_at):
         print(f"[{device_name}] Error: {e}")
         return []
 
-def save_to_csv(events):
+def save_to_csv(events, ts_dict):
     if not events:
         print("\nNo new data since last run.")
         return
 
-    # Remove internal _created_at fields before writing
-    max_created_at = max(ev.get("_created_at", 0) for ev in events)
+    # 分离出不同设备的最高时间戳，并 remove internal _created_at fields before writing
     for ev in events:
-        ev.pop("_created_at", None)
+        src = ev.get("source")
+        created_at = ev.pop("_created_at", 0)
+        # 如果当前事件的时间比记录的该设备时间晚，就更新字典
+        if created_at > ts_dict.get(src, 0.0):
+            ts_dict[src] = created_at
 
     file_exists = OUTPUT_CSV.exists()
     with open(OUTPUT_CSV, "a", newline="") as f:
@@ -223,17 +227,19 @@ def save_to_csv(events):
         writer.writerows(events)
 
     # Save last timestamp for deduplication
-    if max_created_at > 0:
-        save_last_timestamp(max_created_at)
+    save_last_timestamps(ts_dict)
 
     print(f"\nSuccess: {len(events)} NEW entries added.")
 
 if __name__ == "__main__":
     print(f"=== Screen Time Collection - {datetime.now().isoformat()} ===\n")
 
-    last_ts = get_last_timestamp()
-    if last_ts > 0:
-        print(f"Last extraction: {datetime.fromtimestamp(last_ts).isoformat()}")
+    # 读取按设备隔离的时间戳字典
+    ts_dict = get_last_timestamps()
+    if ts_dict:
+        print("Last extraction timestamps:")
+        for source, ts in ts_dict.items():
+            print(f"  [{source}] {datetime.fromtimestamp(ts).isoformat()}")
     else:
         print("First run - extracting all available data")
 
@@ -247,11 +253,13 @@ if __name__ == "__main__":
     # Collect from all mobile devices
     all_mobile_events = []
     for device_name, device_id in devices:
-        events = get_mobile_data(device_name, device_id, last_ts)
+        device_last_ts = ts_dict.get(device_name, 0.0)
+        events = get_mobile_data(device_name, device_id, device_last_ts)
         all_mobile_events.extend(events)
 
     # Collect Mac data
-    mac_events = get_mac_data(last_ts)
+    mac_last_ts = ts_dict.get("Mac", 0.0)
+    mac_events = get_mac_data(mac_last_ts)
 
     # Combine and sort by timestamp
     all_events = all_mobile_events + mac_events
@@ -264,4 +272,5 @@ if __name__ == "__main__":
         print(f"  {device_name}: {count} Events")
     print(f"  Mac: {len(mac_events)} Events")
 
-    save_to_csv(all_events)
+
+    save_to_csv(all_events, ts_dict)
